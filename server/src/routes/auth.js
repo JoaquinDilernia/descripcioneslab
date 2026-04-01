@@ -99,10 +99,54 @@ router.get('/me', requireUser, (req, res) => {
   });
 });
 
-// ==================== TIENDA NUBE OAUTH (existente) ====================
-
 /**
- * POST /auth/exchange
+ * GET /auth/callback
+ * Endpoint de callback de Tienda Nube OAuth.
+ * TN redirige aquí con ?code=xxx después de que el user autoriza.
+ * Intercambia el code por token y redirige al frontend para registro.
+ */
+router.get('/callback', async (req, res) => {
+  const { code } = req.query;
+
+  if (!code) {
+    return res.status(400).json({ error: 'Falta el parámetro "code"' });
+  }
+
+  try {
+    // Intercambiar code por token
+    const tokenData = await exchangeCodeForToken(code);
+    const stored = await saveToken(tokenData);
+
+    // Obtener info de la tienda
+    let storeName = null;
+    try {
+      const store = await tnGet(stored.store_id, stored.access_token, '/');
+      storeName = store.name?.es || store.name?.pt || store.name;
+    } catch {
+      // No es crítico si falla
+    }
+
+    // Redirigir al frontend con los datos para registro
+    // El frontend capturará estos parámetros y mostrará el formulario de registro
+    const params = new URLSearchParams({
+      code: 'success',
+      store_id: stored.store_id,
+      access_token: stored.access_token,
+      store_name: storeName || '',
+    });
+
+    res.redirect(`${env.clientUrl}/?${params.toString()}`);
+  } catch (err) {
+    // Si hay error, redirigir con el error
+    const params = new URLSearchParams({
+      code: 'error',
+      error: err.message,
+    });
+    res.redirect(`${env.clientUrl}/?${params.toString()}`);
+  }
+});
+
+
  * Recibe un code de OAuth y lo intercambia por un access_token.
  * Body: { "code": "xxx" }
  */
