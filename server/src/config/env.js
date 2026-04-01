@@ -19,6 +19,14 @@ const env = {
 
   // JWT
   jwtSecret: process.env.JWT_SECRET || 'default_jwt_secret_change_in_production',
+
+  // Firebase
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    privateKeyId: process.env.FIREBASE_PRIVATE_KEY_ID,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  },
 };
 
 export default env;

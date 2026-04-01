@@ -15,8 +15,8 @@ const router = Router();
 /**
  * Middleware: verifica que haya un token activo.
  */
-function requireAuth(req, res, next) {
-  const token = getStoredToken();
+async function requireAuth(req, res, next) {
+  const token = await getStoredToken();
   if (!token || !token.active) {
     return res.status(401).json({ error: 'No hay tienda conectada' });
   }
@@ -223,7 +223,7 @@ router.post('/apply', async (req, res) => {
     }
 
     // 2. Crear backup antes de aplicar
-    const backup = createBackup(products);
+    const backup = await createBackup(products);
 
     // 3. Aplicar estructura a cada producto
     const results = { applied: 0, errors: [] };
@@ -263,7 +263,7 @@ router.post('/apply', async (req, res) => {
  */
 router.get('/backups/list', async (req, res) => {
   try {
-    const backups = listBackups();
+    const backups = await listBackups();
     res.json({ success: true, backups });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -277,7 +277,7 @@ router.get('/backups/list', async (req, res) => {
 router.post('/backups/:id/rollback', async (req, res) => {
   try {
     const { store_id, access_token } = req.store;
-    const backup = getBackup(req.params.id);
+    const backup = await getBackup(req.params.id);
 
     if (!backup) {
       return res.status(404).json({ success: false, error: 'Backup no encontrado o expirado' });
@@ -403,7 +403,7 @@ router.post('/seo/apply', async (req, res) => {
     const products = await Promise.all(
       productIds.map((id) => tnGet(store_id, access_token, `/products/${id}`))
     );
-    const backup = createBackup(products);
+    const backup = await createBackup(products);
 
     const results = { applied: 0, errors: [] };
 
@@ -651,8 +651,8 @@ Identifica TODAS las secciones o bloques de contenido que se repiten. Recorda qu
  * GET /api/products/structure/default
  * Obtiene la estructura predeterminada guardada.
  */
-router.get('/structure/default', (req, res) => {
-  const data = getDefaultStructure();
+router.get('/structure/default', async (req, res) => {
+  const data = await getDefaultStructure();
   res.json({ success: true, structure: data });
 });
 
@@ -661,12 +661,12 @@ router.get('/structure/default', (req, res) => {
  * Guarda la estructura predeterminada.
  * Body: { sections: [...] }
  */
-router.post('/structure/default', (req, res) => {
+router.post('/structure/default', async (req, res) => {
   const { sections, font } = req.body;
   if (!sections || !Array.isArray(sections)) {
     return res.status(400).json({ success: false, error: 'Se requieren secciones' });
   }
-  const data = saveDefaultStructure(sections, font || '');
+  const data = await saveDefaultStructure(sections, font || '');
   res.json({ success: true, structure: data });
 });
 

@@ -1,29 +1,42 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+/**
+ * tokenStore.js - Token storage using Firestore.
+ * Collection: descripcioneslab_tokens
+ */
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = join(__dirname, '..', '..', 'data');
-const TOKEN_FILE = join(DATA_DIR, 'token.json');
+import { getFirestore } from '../config/firebase.js';
+
+const COLLECTION = 'descripcioneslab_tokens';
+const DOC_ID = 'current_token'; // Single document for the current token
+
+let db;
+try {
+  db = getFirestore();
+} catch {
+  // Will be initialized on first use
+}
 
 /**
- * Lee el token almacenado. Devuelve null si no existe.
+ * Get the stored token. Returns null if it doesn't exist.
  */
-export function getStoredToken() {
-  if (!existsSync(TOKEN_FILE)) return null;
+export async function getStoredToken() {
+  if (!db) db = getFirestore();
 
   try {
-    const raw = readFileSync(TOKEN_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
+    const doc = await db.collection(COLLECTION).doc(DOC_ID).get();
+    if (!doc.exists) return null;
+    return doc.data();
+  } catch (error) {
+    console.error('Error reading stored token:', error);
     return null;
   }
 }
 
 /**
- * Guarda el token en disco.
+ * Save the token to Firestore.
  */
-export function saveToken(data) {
+export async function saveToken(data) {
+  if (!db) db = getFirestore();
+
   const payload = {
     store_id: data.user_id || data.store_id,
     access_token: data.access_token,
@@ -32,10 +45,6 @@ export function saveToken(data) {
     active: true,
   };
 
-  if (!existsSync(DATA_DIR)) {
-    mkdirSync(DATA_DIR, { recursive: true });
-  }
-
-  writeFileSync(TOKEN_FILE, JSON.stringify(payload, null, 2), 'utf-8');
+  await db.collection(COLLECTION).doc(DOC_ID).set(payload);
   return payload;
 }

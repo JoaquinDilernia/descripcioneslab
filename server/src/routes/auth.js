@@ -37,7 +37,7 @@ router.post('/register', async (req, res) => {
     const jwt = signToken(user);
 
     // También guardar en tokenStore para compatibilidad
-    saveToken({ access_token, user_id: store_id });
+    await saveToken({ access_token, user_id: store_id });
 
     res.json({
       success: true,
@@ -70,7 +70,7 @@ router.post('/login', async (req, res) => {
     const jwt = signToken(user);
 
     // Guardar en tokenStore para compatibilidad con rutas existentes
-    saveToken({ access_token: user.access_token, user_id: user.store_id });
+    await saveToken({ access_token: user.access_token, user_id: user.store_id });
 
     res.json({
       success: true,
@@ -115,7 +115,7 @@ router.post('/exchange', async (req, res) => {
 
   try {
     const tokenData = await exchangeCodeForToken(code);
-    const stored = saveToken(tokenData);
+    const stored = await saveToken(tokenData);
 
     // Verificar la conexión haciendo un request de prueba
     try {
@@ -159,7 +159,7 @@ router.post('/token', async (req, res) => {
   }
 
   try {
-    const stored = saveToken({ access_token, user_id: store_id });
+    const stored = await saveToken({ access_token, user_id: store_id });
 
     // Verificar la conexión
     try {
@@ -188,13 +188,13 @@ router.post('/token', async (req, res) => {
  * Devuelve el estado de la conexión actual.
  * Compatible con el flujo viejo (tokenStore) y el nuevo (JWT).
  */
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   // Si tiene JWT, usar eso
   const authHeader = req.headers.authorization;
   if (authHeader && authHeader.startsWith('Bearer ')) {
     try {
       const payload = jwt.verify(authHeader.split(' ')[1], env.jwtSecret);
-      const user = getUser(payload.id);
+      const user = await getUser(payload.id);
       if (user) {
         return res.json({
           connected: true,
@@ -208,7 +208,7 @@ router.get('/status', (req, res) => {
   }
 
   // Fallback: tokenStore
-  const token = getStoredToken();
+  const token = await getStoredToken();
   if (!token || !token.active) {
     return res.json({ connected: false });
   }

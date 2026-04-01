@@ -1,40 +1,39 @@
 /**
- * backupStore.js - Sistema de backup/rollback de descripciones.
+ * backupStore.js - Description backup/rollback system using Firestore.
  *
- * Guarda snapshots de descripciones antes de aplicar cambios masivos.
- * Backups expiran a los 30 minutos (rollback de emergencia).
- * Almacenamiento en JSON files (MVP), migrable a Firestore.
+ * Saves snapshots of descriptions before applying bulk changes.
+ * Backups expire after 30 minutes (emergency rollback).
+ * Storage: Firestore collection descripcioneslab_backups
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { getFirestore } from '../config/firebase.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const BACKUP_DIR = join(__dirname, '..', '..', 'data', 'backups');
-const EXPIRY_MS = 30 * 60 * 1000; // 30 minutos
+const COLLECTION = 'descripcioneslab_backups';
+const EXPIRY_MS = 30 * 60 * 1000; // 30 minutes
 
-function ensureDir() {
-  if (!existsSync(BACKUP_DIR)) {
-    mkdirSync(BACKUP_DIR, { recursive: true });
-  }
+let db;
+try {
+  db = getFirestore();
+} catch {
+  // Will be initialized on first use
 }
 
 /**
- * Crea un backup de las descripciones actuales.
- * @param {Array} products - Productos con su descripción actual
- * @returns {Object} Metadata del backup creado
+ * Create a backup of the current descriptions.
+ * @param {Array} products - Products with their current description
+ * @returns {Object} Metadata of the created backup
  */
-export function createBackup(products) {
-  ensureDir();
+export async function createBackup(products) {
+  if (!db) db = getFirestore();
 
   const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const now = new Date();
+  const expiresAt = new Date(now.getTime() + EXPIRY_MS);
 
   const backup = {
     id,
     created_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + EXPIRY_MS).toISOString(),
+    expires_at: expiresAt.toISOString(),
     product_count: products.length,
     products: {},
   };
@@ -47,7 +46,7 @@ export function createBackup(products) {
     };
   }
 
-  writeFileSync(join(BACKUP_DIR, `${id}.json`), JSON.stringify(backup, null, 2), 'utf-8');
+  await db.collection(COLLECTION).doc(id).set(backup);
 
   return {
     id: backup.id,
@@ -58,60 +57,71 @@ export function createBackup(products) {
 }
 
 /**
- * Lista todos los backups disponibles (no expirados).
+ * List all available (non-expired) backups.
  */
-export function listBackups() {
-  ensureDir();
+export async function listBackups() {
+  if (!db) db = getFirestore();
+
   const now = Date.now();
-  const files = readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json'));
+  const snapshot = await db.collection(COLLECTION).orderBy('created_at', 'desc').get();
+
   const backups = [];
+  const expiredIds = [];
 
-  for (const file of files) {
-    try {
-      const raw = readFileSync(join(BACKUP_DIR, file), 'utf-8');
-      const b = JSON.parse(raw);
-      const expired = new Date(b.expires_at).getTime() < now;
+  for (const doc of snapshot.docs) {
+    const b = doc.data();
+    const expired = new Date(b.expires_at).getTime() < now;
 
-      // Limpiar expirados
-      if (expired) {
-        unlinkSync(join(BACKUP_DIR, file));
-        continue;
-      }
+    // Mark expired for deletion
+    if (expired) {
+      expiredIds.push(doc.id);
+      continue;
+    }
 
-      backups.push({
-        id: b.id,
-        created_at: b.created_at,
-        expires_at: b.expires_at,
-        product_count: b.product_count,
-        minutes_left: Math.round((new Date(b.expires_at).getTime() - now) / 60000),
+    backups.push({
+      id: b.id,
+      created_at: b.created_at,
+      expires_at: b.expires_at,
+      product_count: b.product_count,
+      minutes_left: Math.round((new Date(b.expires_at).getTime() - now) / 60000),
+    });
+  }
+
+  // Clean up expired backups asynchronously
+  if (expiredIds.length > 0) {
+    for (const id of expiredIds) {
+      db.collection(COLLECTION).doc(id).delete().catch(error => {
+        console.error(`Error deleting expired backup ${id}:`, error);
       });
-    } catch {
-      // Archivo corrupto, ignorar
     }
   }
 
-  return backups.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  return backups;
 }
 
 /**
- * Obtiene un backup por ID.
- * @returns {Object|null} Backup completo con productos, o null si no existe/expiró
+ * Get a backup by ID.
+ * @returns {Object|null} Complete backup with products, or null if doesn't exist/expired
  */
-export function getBackup(id) {
-  const file = join(BACKUP_DIR, `${id}.json`);
-  if (!existsSync(file)) return null;
+export async function getBackup(id) {
+  if (!db) db = getFirestore();
 
   try {
-    const raw = readFileSync(file, 'utf-8');
-    const b = JSON.parse(raw);
+    const doc = await db.collection(COLLECTION).doc(id).get();
+    if (!doc.exists) return null;
 
+    const b = doc.data();
+
+    // Check if expired
     if (new Date(b.expires_at).getTime() < Date.now()) {
-      unlinkSync(file);
+      // Clean up expired backup
+      await db.collection(COLLECTION).doc(id).delete();
       return null;
     }
 
     return b;
-  } catch {
+  } catch (error) {
+    console.error(`Error getting backup ${id}:`, error);
     return null;
   }
 }

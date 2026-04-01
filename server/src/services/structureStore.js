@@ -1,43 +1,44 @@
 /**
- * structureStore.js - Persiste la estructura predeterminada de la tienda.
- * Similar a tokenStore.js: JSON file en server/data/.
+ * structureStore.js - Persists the default store structure using Firestore.
+ * Collection: descripcioneslab_structures
  */
 
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { getFirestore } from '../config/firebase.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DATA_DIR = path.join(__dirname, '../../data');
-const STORE_FILE = path.join(DATA_DIR, 'structure.json');
+const COLLECTION = 'descripcioneslab_structures';
+const DOC_ID = 'default'; // Single document for default structure
 
-// Asegurar que el dir exista
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+let db;
+try {
+  db = getFirestore();
+} catch {
+  // Will be initialized on first use
 }
 
 /**
- * Guarda la estructura predeterminada.
+ * Save the default structure.
  */
-export function saveDefaultStructure(sections, font) {
+export async function saveDefaultStructure(sections, font) {
+  if (!db) db = getFirestore();
+
   const data = {
     sections,
     font: font || '',
     saved_at: new Date().toISOString(),
   };
-  fs.writeFileSync(STORE_FILE, JSON.stringify(data, null, 2));
+
+  await db.collection(COLLECTION).doc(DOC_ID).set(data);
   return data;
 }
 
 /**
- * Obtiene la estructura predeterminada.
+ * Get the default structure.
  */
-export function getDefaultStructure() {
-  if (!fs.existsSync(STORE_FILE)) return null;
-  try {
-    const raw = fs.readFileSync(STORE_FILE, 'utf-8');
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
+export async function getDefaultStructure() {
+  if (!db) db = getFirestore();
+
+  const doc = await db.collection(COLLECTION).doc(DOC_ID).get();
+  if (!doc.exists) return null;
+
+  return doc.data();
 }
