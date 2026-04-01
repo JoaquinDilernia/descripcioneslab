@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: descripcioneslab-api
+    runtime: node
+    plan: free
+    buildCommand: cd server && npm install
+    startCommand: cd server && npm start
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: CLIENT_URL
+        value: https://descripcioneslab.techdi.com.ar
+      - key: TN_APP_ID
+        sync: false
+      - key: TN_CLIENT_SECRET
+        sync: false
+      - key: TN_CONTACT_EMAIL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
