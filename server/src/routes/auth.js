@@ -147,6 +147,8 @@ router.get('/callback', async (req, res) => {
 });
 
 
+/**
+ * POST /auth/exchange
  * Recibe un code de OAuth y lo intercambia por un access_token.
  * Body: { "code": "xxx" }
  */
