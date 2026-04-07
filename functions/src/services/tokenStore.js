@@ -30,15 +30,20 @@ async function getStoredToken() {
 async function saveToken(data) {
   const db = getFirestore();
 
+  const storeId = data.user_id || data.store_id;
+  if (!storeId) {
+    throw new Error('Missing user_id or store_id in token data');
+  }
+
   const payload = {
-    store_id: data.user_id || data.store_id,
+    store_id: storeId,
     access_token: data.access_token,
     scope: data.scope || '',
     connected_at: new Date().toISOString(),
     active: true,
   };
 
-  await db.collection(COLLECTION).doc(DOC_ID).set(payload);
+  await db.collection(COLLECTION).doc(DOC_ID).set(payload, { merge: true });
   return payload;
 }
 
